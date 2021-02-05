@@ -23,33 +23,27 @@ func main() {
 	}
 	client.DefaultClient.Client = &http.Client{Transport: transport}
 
-	count := 1
+
+	upload(1, 50)
+
+	fmt.Println("======= Done =======")
+}
+
+func upload(uploadCount int, goroutineCount int) {
+
 	source := make(chan int, 100)
 	go func() {
-		for i := 0; i < count; i++ {
+		for i := 0; i < uploadCount; i++ {
 			source <- i + 1
 		}
 		close(source)
 	}()
 
-	upload(source, 50)
-
-	fmt.Println("======= Done =======")
-}
-
-func upload(source <-chan int, goroutineCount int) {
-
-	filePath := "/Users/senyang/Desktop/QiNiu/pycharm.dmg"
-	filePath = "/Users/senyang/Desktop/QiNiu/UploadResource_49M.zip"
-
-	key := "http3_test1"
-	token := "HwFOxpYCQU6oXoZXFOTh1mq5ZZig6Yyocgk3BTZZ:6MoNfPe6Tj6LaZXwSmRoY5PqcCA=:eyJzY29wZSI6ImtvZG8tcGhvbmUtem9uZTAtc3BhY2UiLCJkZWFkbGluZSI6MTYxNzUwNzUxMiwgInJldHVybkJvZHkiOiJ7XCJjYWxsYmFja1VybFwiOlwiaHR0cDpcL1wvY2FsbGJhY2suZGV2LnFpbml1LmlvXCIsIFwiZm9vXCI6JCh4OmZvbyksIFwiYmFyXCI6JCh4OmJhciksIFwibWltZVR5cGVcIjokKG1pbWVUeXBlKSwgXCJoYXNoXCI6JChldGFnKSwgXCJrZXlcIjokKGtleSksIFwiZm5hbWVcIjokKGZuYW1lKX0ifQ=="
-
 	wait := &sync.WaitGroup{}
 	wait.Add(goroutineCount)
 
 	for i := 0; i < goroutineCount; i++ {
-		go func(source <-chan int, filePath, key, token string) {
+		go func(source <-chan int) {
 			defer wait.Done()
 
 			for {
@@ -57,18 +51,22 @@ func upload(source <-chan int, goroutineCount int) {
 				if !ok && len(source) == 0 {
 					break
 				} else {
-					key := key + fmt.Sprintf("%d", rand.Int())
-					err := uploadFile(filePath, key, token)
-					fmt.Printf("index:%d key:%s error:%v \n", index, key, err)
+					uploadFileToQiniu(index)
 				}
 			}
-		}(source, filePath, key, token)
+		}(source)
 	}
 
 	wait.Wait()
 }
 
-func uploadFile(filePath, key, token string) error {
+func uploadFileToQiniu(index int) {
+
+	filePath := "/Users/senyang/Desktop/QiNiu/pycharm.dmg"
+	filePath = "/Users/senyang/Desktop/QiNiu/UploadResource_49M.zip"
+
+	key := "http3_test1" + fmt.Sprintf("%d", rand.Int())
+	token := "HwFOxpYCQU6oXoZXFOTh1mq5ZZig6Yyocgk3BTZZ:6MoNfPe6Tj6LaZXwSmRoY5PqcCA=:eyJzY29wZSI6ImtvZG8tcGhvbmUtem9uZTAtc3BhY2UiLCJkZWFkbGluZSI6MTYxNzUwNzUxMiwgInJldHVybkJvZHkiOiJ7XCJjYWxsYmFja1VybFwiOlwiaHR0cDpcL1wvY2FsbGJhY2suZGV2LnFpbml1LmlvXCIsIFwiZm9vXCI6JCh4OmZvbyksIFwiYmFyXCI6JCh4OmJhciksIFwibWltZVR5cGVcIjokKG1pbWVUeXBlKSwgXCJoYXNoXCI6JChldGFnKSwgXCJrZXlcIjokKGtleSksIFwiZm5hbWVcIjokKGZuYW1lKX0ifQ=="
 
 	config := &storage.Config{
 		Zone: &storage.Region{
@@ -80,5 +78,7 @@ func uploadFile(filePath, key, token string) error {
 	uploader := storage.NewResumeUploader(config)
 	ctx := context.Background()
 
-	return uploader.PutFile(ctx, nil, token, key, filePath, nil)
+	var response interface{}
+	err := uploader.PutFile(ctx, response, token, key, filePath, nil)
+	fmt.Printf("index:%d key:%s error:%v response:%v \n", index, key, err, response)
 }
