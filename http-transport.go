@@ -43,24 +43,27 @@ func upload(uploadCount int, goroutineCount int) {
 	wait.Add(goroutineCount)
 
 	for i := 0; i < goroutineCount; i++ {
-		go func(source <-chan int) {
-			defer wait.Done()
+		go func(source <-chan int, goroutineIndex int) {
+			defer func(goroutineIndex int) {
+				fmt.Printf("== goroutineIndex:%d done \n", goroutineIndex)
+				wait.Done()
+			}(goroutineIndex)
 
 			for {
 				index, ok := <-source
 				if !ok && len(source) == 0 {
 					break
 				} else {
-					uploadFileToQiniu(index)
+					uploadFileToQiniu(index, goroutineIndex)
 				}
 			}
-		}(source)
+		}(source, i)
 	}
 
 	wait.Wait()
 }
 
-func uploadFileToQiniu(index int) {
+func uploadFileToQiniu(index int, goroutineIndex int) {
 
 	filePath := "/Users/senyang/Desktop/QiNiu/pycharm.dmg"
 	filePath = "/Users/senyang/Desktop/QiNiu/UploadResource_49M.zip"
@@ -81,5 +84,5 @@ func uploadFileToQiniu(index int) {
 
 	var response storage.PutRet
 	err := uploader.PutFile(ctx, &response, token, key, filePath, nil)
-	fmt.Printf("index:%d key:%s error:%v response:%v \n", index, key, err, response)
+	fmt.Printf("goroutineIndex:%d, index:%d key:%s error:%v response:%v \n", goroutineIndex, index, key, err, response)
 }
