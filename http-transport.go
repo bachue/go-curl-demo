@@ -6,6 +6,7 @@ import (
 	"math/rand"
 	"net/http"
 	"sync"
+	"syscall"
 	"time"
 
 	"github.com/YangSen-qn/go-curl/v2/curl"
@@ -24,7 +25,7 @@ func main() {
 	client.DefaultClient.Client = &http.Client{Transport: transport}
 
 
-	upload(1000, 50)
+	upload(1000, 2)
 
 	fmt.Println("======= Done =======")
 }
@@ -54,7 +55,20 @@ func upload(uploadCount int, goroutineCount int) {
 				if !ok && len(source) == 0 {
 					break
 				} else {
+					done := make(chan bool)
+					go func() {
+						for {
+							select {
+							case <-done:
+								break
+							case <-time.After(60 * time.Second):
+								fmt.Println("exit by timeout")
+								syscall.Exit(-1)
+							}
+						}
+					}()
 					uploadFileToQiniu(index, goroutineIndex)
+					done<- true
 				}
 			}
 		}(source, i)
