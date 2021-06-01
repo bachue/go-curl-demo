@@ -6,7 +6,6 @@ import (
 	"math/rand"
 	"net/http"
 	"sync"
-	"syscall"
 	"time"
 
 	"github.com/YangSen-qn/go-curl/v2/curl"
@@ -18,14 +17,14 @@ func main() {
 	rand.Seed(time.Now().UnixNano())
 
 	transport := &curl.Transport{
-		Transport: &http.Transport{},
-		//CAPath:     "/Users/senyang/Desktop/QiNiu/Test/Go/test/examples/http-transport/curl/lib/resource/cacert.pem",
-		ForceHTTP3: true,
+		Transport:      &http.Transport{},
+		ForceHTTP3:     true,
+		HTTP3LogEnable: true,
 	}
-	client.DefaultClient.Client = &http.Client{Transport: transport}
+	client.DefaultClient.Client = &http.Client{Transport: transport, Timeout: 180 * time.Second}
 
-
-	upload(1000, 2)
+	// upload(1, 1)
+	upload(100000, 6)
 
 	fmt.Println("======= Done =======")
 }
@@ -52,23 +51,17 @@ func upload(uploadCount int, goroutineCount int) {
 
 			for {
 				index, ok := <-source
-				if !ok && len(source) == 0 {
+				if !ok {
 					break
 				} else {
-					done := make(chan bool)
-					go func() {
-						for {
-							select {
-							case <-done:
-								break
-							case <-time.After(60 * time.Second):
-								fmt.Println("exit by timeout")
-								syscall.Exit(-1)
-							}
-						}
-					}()
-					uploadFileToQiniu(index, goroutineIndex)
-					done<- true
+					key := "http3_test_" + time.Now().Format("2006/01/02 15:04:05.999999")
+					fmt.Printf("goroutineIndex:%d, index:%d, key:%v\n", goroutineIndex, index, key)
+					response, err := uploadFileToQiniu(key)
+					if err != nil {
+						fmt.Printf("goroutineIndex:%d, index:%d, key:%v, response:%v, err:%v\n", goroutineIndex, index, key, response, err)
+					} else {
+						fmt.Printf("goroutineIndex:%d, index:%d, key:%v, response:%v\n", goroutineIndex, index, key, response)
+					}
 				}
 			}
 		}(source, i)
@@ -77,14 +70,10 @@ func upload(uploadCount int, goroutineCount int) {
 	wait.Wait()
 }
 
-func uploadFileToQiniu(index int, goroutineIndex int) {
+func uploadFileToQiniu(key string) (response storage.PutRet, err error) {
+	filePath := "/tmp/1m"
 
-	filePath := "/Users/senyang/Desktop/QiNiu/pycharm.dmg"
-	filePath = "/Users/senyang/Desktop/QiNiu/UploadResource_49M.zip"
-	filePath = "/Users/senyang/Desktop/QiNiu/Image/image.png"
-
-	key := "http3_test1" + fmt.Sprintf("%d", rand.Int())
-	token := "HwFOxpYCQU6oXoZXFOTh1mq5ZZig6Yyocgk3BTZZ:6MoNfPe6Tj6LaZXwSmRoY5PqcCA=:eyJzY29wZSI6ImtvZG8tcGhvbmUtem9uZTAtc3BhY2UiLCJkZWFkbGluZSI6MTYxNzUwNzUxMiwgInJldHVybkJvZHkiOiJ7XCJjYWxsYmFja1VybFwiOlwiaHR0cDpcL1wvY2FsbGJhY2suZGV2LnFpbml1LmlvXCIsIFwiZm9vXCI6JCh4OmZvbyksIFwiYmFyXCI6JCh4OmJhciksIFwibWltZVR5cGVcIjokKG1pbWVUeXBlKSwgXCJoYXNoXCI6JChldGFnKSwgXCJrZXlcIjokKGtleSksIFwiZm5hbWVcIjokKGZuYW1lKX0ifQ=="
+	token := "HwFOxpYCQU6oXoZXFOTh1mq5ZZig6Yyocgk3BTZZ:K4CV6KyJiU8anDG9czn-w999xQc=:eyJkZWFkbGluZSI6MTY1NDA1MDY0Niwic2NvcGUiOiIyMDIwLTA2LWNoZWNrYmlsbHMifQ=="
 
 	config := &storage.Config{
 		Zone: &storage.Region{
@@ -93,10 +82,12 @@ func uploadFileToQiniu(index int, goroutineIndex int) {
 		Region:   nil,
 		UseHTTPS: true,
 	}
-	uploader := storage.NewResumeUploader(config)
 	ctx := context.Background()
 
-	var response storage.PutRet
-	err := uploader.PutFile(ctx, &response, token, key, filePath, nil)
-	fmt.Printf("goroutineIndex:%d, index:%d key:%s error:%v response:%v \n", goroutineIndex, index, key, err, response)
+	// uploader := storage.NewResumeUploader(config)
+	uploader := storage.NewResumeUploaderV2(config)
+	// uploader := storage.NewFormUploader(config);
+
+	err = uploader.PutFile(ctx, &response, token, key, filePath, nil)
+	return
 }
